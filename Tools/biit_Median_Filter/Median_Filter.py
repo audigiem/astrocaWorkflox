@@ -28,7 +28,7 @@ class Tool():
              autoColumn=True),
         dict(name='radius', help='Rayon pour l\'opération de fermeture.', required=True, type='Float', default=1.5),
         dict(name='border_mode', help='Mode de gestion des bords (reflect, constant, etc.).', required=False,
-             type='Str', default='reflect'),
+             type='Str', default='ignore'),
     ]
 
     outputs = [
@@ -57,7 +57,7 @@ class Tool():
             # print("DEBUG: load_data imported successfully")
             from astroca.tools.exportData import export_data
             # print("DEBUG: export_data imported successfully")
-            from astroca.activeVoxels.spaceMorphology import unified_median_filter_3d
+            from astroca.activeVoxels.medianFilter import unified_median_filter_3d
             # print("DEBUG: closing_morphology_in_space imported successfully")
         except ImportError as e:
             # print(f"DEBUG: First import failed: {e}")
@@ -81,7 +81,7 @@ class Tool():
                 # print("DEBUG: load_data imported successfully (second try)")
                 from astroca.tools.exportData import export_data
                 # print("DEBUG: export_data imported successfully (second try)")
-                from astroca.activeVoxels.spaceMorphology import unified_median_filter_3d
+                from astroca.activeVoxels.medianFilter import unified_median_filter_3d
                 # print("DEBUG: closing_morphology_in_space imported successfully (second try)")
             except ImportError as e:
                 # print(f"DEBUG: Second import also failed: {e}")
