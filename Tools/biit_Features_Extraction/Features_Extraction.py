@@ -46,47 +46,24 @@ class Tool():
         """
         Traite toutes les données en extrayant les caractéristiques d'une séquence d'images 4D.
         """
-        # print(f"DEBUG: Current working directory: {os.getcwd()}")
-        # print(f"DEBUG: __file__ location: {__file__}")
-        # print(f"DEBUG: sys.path: {sys.path[:3]}...")  # Afficher les 3 premiers éléments
-
         try:
             import numpy as np
-            # print("DEBUG: numpy imported successfully")
             from astroca.tools.loadData import load_data
-            # print("DEBUG: load_data imported successfully")
             from astroca.tools.exportData import export_data
-            # print("DEBUG: export_data imported successfully")
             from astroca.features.featuresComputation import save_features_from_events
-            # print("DEBUG: closing_morphology_in_space imported successfully")
         except ImportError as e:
-            # print(f"DEBUG: First import failed: {e}")
             base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'astroca'))
-            # print(f"DEBUG: Trying to add to path: {base_dir}")
-            # print(f"DEBUG: Directory exists: {os.path.exists(base_dir)}")
-            # if os.path.exists(base_dir):
-                # print(
-                    # f"DEBUG: Contents of {base_dir}: {os.listdir(base_dir)[:5]}...")  # Afficher les 5 premiers éléments
-
+           
             if base_dir not in sys.path:
                 sys.path.append(base_dir)
-                # print(f"DEBUG: Added {base_dir} to sys.path")
-            # else:
-                # print(f"DEBUG: {base_dir} already in sys.path")
-
+            
             try:
                 import numpy as np
-                # print("DEBUG: numpy imported successfully (second try)")
                 from astroca.tools.loadData import load_data
-                # print("DEBUG: load_data imported successfully (second try)")
                 from astroca.tools.exportData import export_data
-                # print("DEBUG: export_data imported successfully (second try)")
                 from astroca.features.featuresComputation import save_features_from_events
-                # print("DEBUG: closing_morphology_in_space imported successfully (second try)")
             except ImportError as e:
-                # print(f"DEBUG: Second import also failed: {e}")
 
-                # Essayons une approche différente pour trouver astroca
                 possible_paths = [
                     os.path.join(os.path.dirname(__file__), '..', '..', 'astroca'),
                     os.path.join(os.path.dirname(__file__), '..', '..', '..', 'astroca'),
@@ -96,19 +73,19 @@ class Tool():
 
                 for path in possible_paths:
                     abs_path = os.path.abspath(path)
-                    # print(f"DEBUG: Checking path: {abs_path}")
+
                     if os.path.exists(abs_path):
-                        # print(f"DEBUG: Found astroca at: {abs_path}")
+
                         if abs_path not in sys.path:
                             sys.path.append(abs_path)
                         try:
                             from astroca.tools.loadData import load_data
                             from astroca.tools.exportData import export_data
                             from astroca.features.featuresComputation import save_features_from_events
-                            # print("DEBUG: Successfully imported astroca modules!")
+
                             break
                         except ImportError as e2:
-                            # print(f"DEBUG: Import failed even with path {abs_path}: {e2}")
+
                             continue
                 else:
                     raise ImportError("Impossible d'importer les modules nécessaires. "
