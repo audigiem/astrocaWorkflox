@@ -1,6 +1,6 @@
 import os
 import sys
-
+import subprocess
 
 class Tool():
     # Nom affiché dans BioImageIT
@@ -36,103 +36,68 @@ class Tool():
              type='Path')
     ]
 
-    def processAllData(self, argsList):
+    def setup_environment(self):
+        try:
+            import astroca
+            print("Package astroca déjà disponible")
+            return
+        except ImportError:
+            print("Installation du package astroca depuis GitHub...")
+
+        repo_url = "git+ssh://git@github.com/audigiem/AstrocytesSegmentation.git@bioimageIT_src"
+        try:
+            subprocess.check_call([
+                sys.executable, "-m", "pip", "install", repo_url
+            ])
+            print("Package astroca installé avec succès")
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Échec de l'installation pip du package astroca : {e}")
+
+
+    def processData(self, args):
         """
-        Traite toutes les données en appliquant un filtre médian 3D.
+        Traite les données en appliquant un filtre médian 3D.
 
         Paramètres :
-            argsList : liste d'objets avec les attributs nécessaires pour chaque image
+            args : objet avec les attributs nécessaires pour l'image d'entrée, le rayon et le mode de bordure
 
         Retour :
             None
         """
+        self.setup_environment()
+
         try:
             import numpy as np
             from astroca.tools.loadData import load_data
             from astroca.tools.exportData import export_data
             from astroca.activeVoxels.medianFilter import unified_median_filter_3d
         except ImportError as e:
-            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'astroca'))
-            
-            if base_dir not in sys.path:
-                sys.path.append(base_dir)
-               
-            try:
-                import numpy as np
-                from astroca.tools.loadData import load_data
-                from astroca.tools.exportData import export_data
-                from astroca.activeVoxels.medianFilter import unified_median_filter_3d
-            except ImportError as e:
-               
-                possible_paths = [
-                    os.path.join(os.path.dirname(__file__), '..', '..', 'astroca'),
-                    os.path.join(os.path.dirname(__file__), '..', '..', '..', 'astroca'),
-                    os.path.join(os.path.dirname(__file__), 'astroca'),
-                    '/home/matteo/Bureau/INRIA/codePython/astroca',  # Chemin absolu basé sur votre structure
-                ]
+            raise ImportError("Impossible d'importer les modules nécessaires. "
+                              "Assurez-vous que le package astroca est installé correctement.") from e
 
-                for path in possible_paths:
-                    abs_path = os.path.abspath(path)
-                    if os.path.exists(abs_path):
-                        if abs_path not in sys.path:
-                            sys.path.append(abs_path)
-                        try:
-                            from astroca.tools.loadData import load_data
-                            from astroca.tools.exportData import export_data
-                            from astroca.activeVoxels.medianFilter import unified_median_filter_3d
-                            break
-                        except ImportError as e2:
-                            continue
-                else:
-                    raise ImportError("Impossible d'importer les modules nécessaires. "
-                                      "Vérifiez que le module 'astroca' est présent.") from e
-
-        time_length = len(argsList)
-        first_volume = argsList[0].closed_data
-        first_volume = str(first_volume)  # Ensure it's a string path
-        # Vérification du fichier d'entrée
+        first_volume = str(args.closed_data)
         if not os.path.exists(first_volume):
-            raise FileNotFoundError(f"Le fichier d'entrée est introuvable : {first_volume}")
+            raise FileNotFoundError(f"Le fichier d'entrée n'existe pas : {first_volume}")
         data = load_data(first_volume)
-        print(f"Shape of loaded data: {data.shape}")
 
-        Z, Y, X = data.shape
-        data4D = np.empty((time_length, Z, Y, X), dtype=data.dtype)
-        data4D[0] = data  # Initialize the first time frame
+        rad = float(args.radius)
+        border_mode = str(args.border_mode)
 
-        # Merge all the others input data into one 4D array
-        for t, arg in enumerate(argsList[1:], start=1):
-            input_path = arg.closed_data
-            input_path = str(input_path)
+        output_image = args.output_image
 
-            # check files
-            if not os.path.exists(input_path):
-                raise FileNotFoundError(f"Le fichier d'entrée est introuvable : {input_path}")
-            data = load_data(input_path)
-            print(f"Data shape for time {t}: {data.shape}")
-            data4D[t] = data
+        processed_data = unified_median_filter_3d(data, rad, border_mode)
 
-        print(f"Shape of merged data: {data4D.shape}")
-
-        # Load xmin and xmax indices
-        radius = float(argsList[0].radius)
-        border_mode = str(argsList[0].border_mode)
-
-        output_image = argsList[0].output_image
-
-        # Apply the space closing operation
-        processed_data = unified_median_filter_3d(data4D, radius, border_mode)
-
-        # Save each time frame as a separate image
         file_name = str(os.path.basename(output_image))
-        # remove .tif extension if present
         if file_name.endswith('.tif'):
-            file_name = file_name[:-5]
-        for t in range(time_length):
-            file_name_t = f"{file_name}{t}.tif"
-            data_to_export = processed_data[t][np.newaxis, ...]  # Add a new axis for time
-            export_data(data_to_export, os.path.dirname(output_image), export_as_single_tif=True, file_name=file_name_t)
+            file_name = file_name[:-4]
+        export_data(processed_data, os.path.dirname(output_image), export_as_single_tif=True, file_name=file_name)
 
-
+    def processAllData(self, argsList):
+        for args in argsList:
+            try:
+                self.processData(args)
+            except Exception as e:
+                print(f"Erreur lors du traitement de l'image {args.closed_data}: {e}")
+                continue
 
 

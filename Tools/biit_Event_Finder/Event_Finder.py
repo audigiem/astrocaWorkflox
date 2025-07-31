@@ -1,7 +1,6 @@
 import os
 import sys
-from email.policy import default
-
+import subprocess
 
 class Tool():
     # Nom affiché dans BioImageIT
@@ -28,130 +27,102 @@ class Tool():
         dict(name='input_image', help='Chemin vers le fichier .tif 4D (T,Z,Y,X).', required=True, type='Path',
              autoColumn=True),
         dict(name='threshold_size_3d', help='Taille minimale des composants connexes en 3D pour être considérées actives.',
-             default=400, type='Integer', autoColumn=True),
+             default=400, type='Integer'),
         dict(name='threshold_correlation', help='Seuil de corrélation pour détecter les changements dynamiques.',
-             default=0.6, type='Float', autoColumn=True),
+             default=0.6, type='Float'),
         dict(name='threshold_size_3d_remove',
              help='Taille minimale des composants connexes en 3D pour être retirées de la détection.',
-             default=20, type='Integer', autoColumn=True),
+             default=20, type='Integer'),
     ]
 
     outputs = [
         dict(name='output_image', help='Image transformée sauvegardée.', default='calciumEvents.tif',
              type='Path'),
-        dict(name='ids_events', help='Identifiants des événements détectés (de 1 à ids_events)', type='Integer', autoColumn=True)
+        dict(name='ids_events', help='Identifiants des événements détectés (de 1 à ids_events)', default='data.txt', type='Path')
     ]
 
-    def processAllData(self, argsList):
+    def setup_environment(self):
+        try:
+            import astroca
+            print("Package astroca déjà disponible")
+            return
+        except ImportError:
+            print("Installation du package astroca depuis GitHub...")
+
+        repo_url = "git+ssh://git@github.com/audigiem/AstrocytesSegmentation.git@bioimageIT_src"
+        try:
+            subprocess.check_call([
+                sys.executable, "-m", "pip", "install", repo_url
+            ])
+            print("Package astroca installé avec succès")
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Échec de l'installation pip du package astroca : {e}")
+
+    def processData(self, args):
         """
-        Traite toutes les données en des seuils pour détecter les voxels actifs dans une séquence d'images 4D.
+        Traite les données en appliquant la fermeture d'espace.
 
         Paramètres :
-            argsList : liste d'objets avec les attributs nécessaires pour chaque image
+            args : objet avec les attributs nécessaires pour l'image d'entrée, le rayon et le mode de bordure
 
         Retour :
             None
         """
+        # Configuration de l'environnement
+        self.setup_environment()
+
+        # Import des modules après installation
         try:
             import numpy as np
             from astroca.tools.loadData import load_data
             from astroca.tools.exportData import export_data
             from astroca.events.eventDetectorCorrected import detect_calcium_events_opti
         except ImportError as e:
-            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'astroca'))
+            raise ImportError("Impossible d'importer les modules nécessaires. "
+                              "Vérifiez que le module 'astroca' est présent.") from e
 
-            if base_dir not in sys.path:
-                sys.path.append(base_dir)
-
-            try:
-                import numpy as np
-                from astroca.tools.loadData import load_data
-                from astroca.tools.exportData import export_data
-                from astroca.events.eventDetectorCorrected import detect_calcium_events_opti
-            except ImportError as e:
-
-                # Essayons une approche différente pour trouver astroca
-                possible_paths = [
-                    os.path.join(os.path.dirname(__file__), '..', '..', 'astroca'),
-                    os.path.join(os.path.dirname(__file__), '..', '..', '..', 'astroca'),
-                    os.path.join(os.path.dirname(__file__), 'astroca'),
-                    '/home/matteo/Bureau/INRIA/codePython/astroca',  # Chemin absolu basé sur votre structure
-                ]
-
-                for path in possible_paths:
-                    abs_path = os.path.abspath(path)
-                    if os.path.exists(abs_path):
-                        if abs_path not in sys.path:
-                            sys.path.append(abs_path)
-                        try:
-                            from astroca.tools.loadData import load_data
-                            from astroca.tools.exportData import export_data
-                            from astroca.dynamicImage.backgroundEstimator import background_estimation_single_block
-                            break
-                        except ImportError as e2:
-                            continue
-                else:
-                    raise ImportError("Impossible d'importer les modules nécessaires. "
-                                      "Vérifiez que le module 'astroca' est présent.") from e
-
-        time_length = len(argsList)
-        first_volume = argsList[0].input_image
-        first_volume = str(first_volume)  # Ensure it's a string path
+        av_path = str(args.input_image)
         # Vérification du fichier d'entrée
-        if not os.path.exists(first_volume):
-            raise FileNotFoundError(f"Le fichier d'entrée est introuvable : {first_volume}")
-        data = load_data(first_volume)
-        # print(f"Shape of loaded data: {data.shape}")
+        if not os.path.exists(av_path):
+            raise FileNotFoundError(f"Le fichier d'entrée est introuvable : {av_path}")
+        data = load_data(av_path)
 
-        Z, Y, X = data.shape
-        data4D = np.empty((time_length, Z, Y, X), dtype=data.dtype)
-        data4D[0] = data  # Initialize the first time frame
+        threshold_size_3d = int(args.threshold_size_3d)
+        threshold_correlation = float(args.threshold_correlation)
+        threshold_size_3d_remove = int(args.threshold_size_3d_remove)
 
-        # Merge all the others input data into one 4D array
-        for t, arg in enumerate(argsList[1:], start=1):
-            input_path = arg.input_image
-            input_path = str(input_path)
-
-            # check files
-            if not os.path.exists(input_path):
-                raise FileNotFoundError(f"Le fichier d'entrée est introuvable : {input_path}")
-            data = load_data(input_path)
-            # print(f"Data shape for time {t}: {data.shape}")
-            data4D[t] = data
-
-        # print(f"Shape of merged data: {data4D.shape}")
-
-        threshold_size_3d = int(argsList[0].threshold_size_3d)
-        threshold_correlation = float(argsList[0].threshold_correlation)
-        threshold_size_3d_remove = int(argsList[0].threshold_size_3d_remove)
-
-        output_image = argsList[0].output_image
-        
-        param_event_finder = {
+        params_event_detection = {
+            'save' : {'save_events' : 0},
+            'paths' : {'output_dir': None},
             'events_extraction' : {
                 'threshold_size_3d': threshold_size_3d,
                 'threshold_corr': threshold_correlation,
                 'threshold_size_3d_removed': threshold_size_3d_remove
-            },
-            'files' : {'save_results': 0},
-            'paths' : {'output_dir': None}
+            }
         }
 
-        # Apply the active voxel finder
-        processed_data, ids_events = detect_calcium_events_opti(data4D, param_event_finder)
+        output_image = args.output_image
 
-        # Save each time frame as a separate image
+        id_connections, ids_events = detect_calcium_events_opti(data, params_event_detection)
+
+        # open data.txt file to write ids_events
+        ids_events_path = str(args.ids_events)
+        if not os.path.exists(os.path.dirname(ids_events_path)):
+            os.makedirs(os.path.dirname(ids_events_path))
+        with open(ids_events_path, 'w') as f:
+            f.write(f"{ids_events}")
+
         file_name = str(os.path.basename(output_image))
         # remove .tif extension if present
         if file_name.endswith('.tif'):
-            file_name = file_name[:-5]
-        for t in range(time_length):
-            file_name_t = f"{file_name}{t}.tif"
-            data_to_export = processed_data[t][np.newaxis, ...]  # Add a new axis for time
-            export_data(data_to_export, os.path.dirname(output_image), export_as_single_tif=True, file_name=file_name_t)
+            file_name = file_name[:-4]
+        export_data(id_connections, os.path.dirname(output_image), export_as_single_tif=True, file_name=file_name)
 
-        output_ids_events = int(ids_events)
-        self.outputs[1]['ids_events'] = output_ids_events
-        print(f"DEBUG: Number of detected events: {output_ids_events}")
-
+    def processAllData(self, argsList):
+        for args in argsList:
+            try:
+                self.processData(args)
+            except Exception as e:
+                print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
+                continue
 

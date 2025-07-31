@@ -1,5 +1,6 @@
 import os
 import sys
+import subprocess
 class Tool():
     # Nom affiché dans BioImageIT
     name = "Z-score computation"
@@ -23,113 +24,98 @@ class Tool():
     # Définition des entrées attendues
     inputs = [
         dict(name='input_image', help='Chemin vers le fichier .tif 4D (T,Z,Y,X).', required=True, type='Path', autoColumn=True),
-        dict(name='index_xmin', help='Chemin vers le fichier .npy contenant les xmin par Z.', required=True, type='Path'),
-        dict(name='index_xmax', help='Chemin vers le fichier .npy contenant les xmax par Z.', required=True, type='Path'),
-        dict(name='std_noise', help='Écart-type du bruit pour la normalisation.', required=True, type='Float', default=1.17),
-        dict(name='mean_noise', help='Moyenne du bruit pour la normalisation.', required=True, type='Float', default=0.93),
+        dict(name='index_xmin', help='Chemin vers le fichier .npy contenant les xmin par Z.', required=True, type='Path', autoColumn=True),
+        dict(name='index_xmax', help='Chemin vers le fichier .npy contenant les xmax par Z.', required=True, type='Path', autoColumn=True),
+        dict(name='data', help='Moyenne du bruit et Écart-type pour la normalisation.', required=True, type='Path', autoColumn=True),
         dict(name='threshold', help='Seuil pour la détection des voxels actifs.', required=True, type='Float', default=2.8),
     ]
 
     outputs = [
-        dict(name='output_image', help='Image transformée sauvegardée.', default='Zscore.tif', type='Path')
+        dict(name='output_image', help='Image transformée sauvegardée.', default='zScore.tif', type='Path')
     ]
- 
-        
-    
-    def processAllData(self, argsList):
+
+    def setup_environment(self):
+        try:
+            import astroca
+            print("Package astroca déjà disponible")
+            return
+        except ImportError:
+            print("Installation du package astroca depuis GitHub...")
+
+        repo_url = "git+ssh://git@github.com/audigiem/AstrocytesSegmentation.git@bioimageIT_src"
+        try:
+            subprocess.check_call([
+                sys.executable, "-m", "pip", "install", repo_url
+            ])
+            print("Package astroca installé avec succès")
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Échec de l'installation pip du package astroca : {e}")
+
+
+    def processData(self, args):
         """
-        Traite toutes les données en appliquant la variance stabilisation.
-        
+        Traite les données en appliquant la variance stabilisation.
+
         Paramètres :
-            argsList : liste d'objets avec les attributs nécessaires pour chaque image
-        
+            args : objet avec les attributs nécessaires pour l'image d'entrée et les indices xmin/xmax
+
         Retour :
             None
         """
-        # Import avec fallback si lancement local
+        # Configuration de l'environnement
+        self.setup_environment()
+
+        # Import des modules après installation
         try:
             import numpy as np
             from astroca.tools.loadData import load_data
             from astroca.tools.exportData import export_data
             from astroca.activeVoxels.zScore import compute_z_score
         except ImportError as e:
-            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'astroca'))
-            if base_dir not in sys.path:
-                sys.path.append(base_dir)
-            try:
-                import numpy as np
-                from astroca.tools.loadData import load_data
-                from astroca.tools.exportData import export_data
-                from astroca.activeVoxels.zScore import compute_z_score
-            except ImportError as e:
-                raise ImportError("Impossible d'importer les modules nécessaires. "
-                                  "Vérifiez que le module 'astroca' est présent.") from e
-                
-        time_length = len(argsList)     
-        first_volume = argsList[0].input_image
-        first_volume = str(first_volume)  # Ensure it's a string path
+            raise ImportError("Impossible d'importer les modules nécessaires. "
+                              "Vérifiez que le module 'astroca' est présent.") from e
+
+        image_path = str(args.input_image)  # Ensure it's a string path
         # Vérification du fichier d'entrée
-        if not os.path.exists(first_volume):
-            raise FileNotFoundError(f"Le fichier d'entrée est introuvable : {first_volume}")
-        data = load_data(first_volume)
-        print(f"Shape of loaded data: {data.shape}")
-        
-        Z, Y, X = data.shape
-        data4D = np.empty((time_length, Z, Y, X), dtype=data.dtype)
-        data4D[0] = data  # Initialize the first time frame
-                
-        # Merge all the others input data into one 4D array
-        for t, arg in enumerate(argsList[1:], start=1):
-            input_path = arg.input_image
-            input_path = str(input_path)
-            
-            # check files
-            if not os.path.exists(input_path):
-                raise FileNotFoundError(f"Le fichier d'entrée est introuvable : {input_path}")
-            data = load_data(input_path)
-            print(f"Data shape for time {t}: {data.shape}")
-            data4D[t] = data
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Le fichier d'entrée est introuvable : {image_path}")
+        data = load_data(image_path)
 
-        print(f"Shape of merged data: {data4D.shape}")
-        
-        # Load xmin and xmax indices
-        xmin_path = argsList[0].index_xmin
-        xmax_path = argsList[0].index_xmax
-        xmin_path = str(xmin_path)
-        xmax_path = str(xmax_path)
-        # we have xmin_path = ..../index_xmin0.npy lets remove the 0 at the end
-        if xmin_path.endswith('0.npy'):
-            xmin_path = xmin_path[:-5] + '.npy'
-        if xmax_path.endswith('0.npy'):
-            xmax_path = xmax_path[:-5] + '.npy'
-        if not os.path.exists(xmin_path):
-            raise FileNotFoundError(f"Le fichier index_xmin est introuvable : {xmin_path}")
-        if not os.path.exists(xmax_path):
-            raise FileNotFoundError(f"Le fichier index_xmax est introuvable : {xmax_path}")
-        index_xmin = np.load(xmin_path)
-        index_xmax = np.load(xmax_path)
-        
-        # Load std_noise and mean_noise
-        std_noise = float(argsList[0].std_noise)
-        mean_noise = float(argsList[0].mean_noise)
-        threshold = float(argsList[0].threshold)
+        index_xmin_path = str(args.index_xmin)
+        index_xmax_path = str(args.index_xmax)
+        # Vérification des fichiers d'indices
+        if not os.path.exists(index_xmin_path):
+            raise FileNotFoundError(f"Le fichier index_xmin est introuvable : {index_xmin_path}")
+        if not os.path.exists(index_xmax_path):
+            raise FileNotFoundError(f"Le fichier index_xmax est introuvable : {index_xmax_path}")
+        index_xmin = np.load(index_xmin_path)
+        index_xmax = np.load(index_xmax_path)
 
-        output_image = argsList[0].output_image
-        
+        data_path = str(args.data)
+        if not os.path.exists(data_path):
+            raise FileNotFoundError(f"Le fichier de données est introuvable : {data_path}")
+        # Load std_noise and mean_noise from the .txt file
+        with open(data_path, 'r') as f:
+            lines = f.readlines()
+            mean_noise = float(lines[0].strip())
+            std_noise = float(lines[1].strip())
+        threshold = float(args.threshold)
+        output_image = str(args.output_image)  # Ensure it's a string path
+
         # Apply the Z-score computation
-        processed_data = compute_z_score(data4D, std_noise, mean_noise, threshold, index_xmin, index_xmax)
-        
-        # Save each time frame as a separate image
+        processed_data = compute_z_score(data, std_noise, mean_noise, threshold, index_xmin, index_xmax)
+
+        # Save the processed data
         file_name = str(os.path.basename(output_image))
         # remove .tif extension if present
         if file_name.endswith('.tif'):
-            file_name = file_name[:-5]
-        for t in range(time_length):
-            file_name_t = f"{file_name}{t}.tif"
-            data_to_export = processed_data[t][np.newaxis, ...]  # Add a new axis for time
-            export_data(data_to_export, os.path.dirname(output_image), export_as_single_tif=True, file_name=file_name_t)
-        
-        
-        
+            file_name = file_name[:-4]
+        export_data(processed_data, os.path.dirname(output_image), export_as_single_tif=True, file_name=file_name)
     
-    
+    def processAllData(self, argsList):
+        for args in argsList:
+            try:
+                self.processData(args)
+            except Exception as e:
+                print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
+                continue
