@@ -76,7 +76,7 @@ class Tool():
             import numpy as np
             from astroca.tools.loadData import load_data
             from astroca.tools.exportData import export_data
-            from astroca.events.eventDetectorCorrected import detect_calcium_events_opti
+            from astroca.events.eventDetector import detect_calcium_events_opti
         except ImportError as e:
             raise ImportError("Impossible d'importer les modules nécessaires. "
                               "Vérifiez que le module 'astroca' est présent.") from e
@@ -119,10 +119,11 @@ class Tool():
         export_data(id_connections, os.path.dirname(output_image), export_as_single_tif=True, file_name=file_name)
 
     def processAllData(self, argsList):
-        for args in argsList:
-            try:
-                self.processData(args)
-            except Exception as e:
-                print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
-                continue
+        if len(argsList) > 1:
+            for args in argsList:
+                try:
+                    self.processData(args)
+                except Exception as e:
+                    print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
+                    continue
 

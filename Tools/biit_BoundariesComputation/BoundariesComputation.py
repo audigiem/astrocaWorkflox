@@ -23,13 +23,11 @@ class Tool():
     # Les inputs restent identiques
     inputs = [
         dict(name='input_image', help='Chemin vers le fichier .tif 4D (T,Z,Y,X).', required=True, type='Path', autoColumn=True),
-        dict(name='x_min', help='Minimum x coordinate for cropping', required=True, type='Int', default=0),
-        dict(name='x_max', help='Maximum x coordinate for cropping', required=True, type='Int', default=319),
         dict(name='pixel_cropped', help='Number of pixels to crop from the height dimension.', required=True, type='Int', default=10),
     ]
 
     outputs = [
-        dict(name='output_image', help='Image transformée sauvegardée.', default='data_cropped.tif', type='Path'),
+        dict(name='output_image', help='Image transformée sauvegardée.', default='data.tif', type='Path'),
         dict(name='index_xmin', help='Chemin vers le fichier .npy contenant les xmin par Z.', default='index_xmin.npy', required=True, type='Path'),
         dict(name='index_xmax', help='Chemin vers le fichier .npy contenant les xmax par Z.', default='index_xmax.npy', required=True, type='Path')
     ]
@@ -74,15 +72,11 @@ class Tool():
         # Chargement des données
         data = load_data(first_volume)
 
-        x_min = args.x_min
-        x_max = args.x_max
         pixel_cropped = args.pixel_cropped
         output_image = args.output_image
                 
         params = {
             'preprocessing': {
-                'x_min': x_min,
-                'x_max': x_max,
                 'pixel_cropped': pixel_cropped
             },
             'save': {
@@ -110,10 +104,11 @@ class Tool():
 
 
     def processAllData(self, argsList):
-        for args in argsList:
-            try:
-                self.processData(args)
-            except Exception as e:
-                print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
-                continue
+        if len(argsList) > 1:
+            for args in argsList:
+                try:
+                    self.processData(args)
+                except Exception as e:
+                    print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
+                    continue
 

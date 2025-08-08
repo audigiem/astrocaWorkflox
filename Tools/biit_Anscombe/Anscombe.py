@@ -24,8 +24,8 @@ class Tool():
     # Définition des entrées attendues
     inputs = [
         dict(name='input_image', help='Chemin vers le fichier .tif 4D (T,Z,Y,X).', required=True, type='Path', autoColumn=True),
-        dict(name='index_xmin', help='Chemin vers le fichier .npy contenant les xmin par Z.', required=True, type='Path'),
-        dict(name='index_xmax', help='Chemin vers le fichier .npy contenant les xmax par Z.', required=True, type='Path'),
+        dict(name='index_xmin', help='Chemin vers le fichier .npy contenant les xmin par Z.', required=True, type='Path', autoColumn=True),
+        dict(name='index_xmax', help='Chemin vers le fichier .npy contenant les xmax par Z.', required=True, type='Path', autoColumn=True),
     ]
 
     outputs = [
@@ -114,10 +114,11 @@ class Tool():
         export_data(processed_data, os.path.dirname(output_image), export_as_single_tif=True, file_name=file_name)
 
     def processAllData(self, argsList):
-        for args in argsList:
-            try:
-                self.processData(args)
-            except Exception as e:
-                print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
-                continue
+        if len(argsList) > 1:
+            for args in argsList:
+                try:
+                    self.processData(args)
+                except Exception as e:
+                    print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
+                    continue
 

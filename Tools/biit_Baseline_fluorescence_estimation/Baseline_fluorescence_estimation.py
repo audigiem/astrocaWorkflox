@@ -17,14 +17,15 @@ class Tool():
 
     inputs = [
         dict(name='input_image', help='Chemin vers le fichier .tif 4D (T,Z,Y,X).', required=True, type='Path', autoColumn=True),
-        dict(name='index_xmin', help='Chemin vers le fichier .npy contenant les xmin par Z.', required=True, type='Path'),
-        dict(name='index_xmax', help='Chemin vers le fichier .npy contenant les xmax par Z.', required=True, type='Path'),
-        dict(name='moving_window', help="Window size for background estimation.", required=False, type='Int', default=7),
+        dict(name='index_xmin', help='Chemin vers le fichier .npy contenant les xmin par Z.', required=True, type='Path', autoColumn=True),
+        dict(name='index_xmax', help='Chemin vers le fichier .npy contenant les xmax par Z.', required=True, type='Path', autocolumn=True),
+        dict(name='acquisition_frequency', help="Fréqence d'échantillonage de la scène 4D", required=True, type='Int'),
+        dict(name='amplification_factor', help="Facteur d'amplification pour l'estimation du fond", required=False, type='Float', default=2.0),
     ]
 
     outputs = [
         dict(name='output_image', help='The output image.', 
-             default='F0_estimated.tif', type='Path')
+             default='F0.tif', type='Path')
     ]
 
     def setup_environment(self):
@@ -86,12 +87,14 @@ class Tool():
         index_xmin = np.load(index_xmin_path)
         index_xmax = np.load(index_xmax_path)
 
-        moving_window = int(args.moving_window)
+        acquisition_frequency = float(args.acquisition_frequency)
+        amplification_factor = float(args.amplification_factor)
         output_image = str(args.output_image)
 
         param_background_estimation = {
             'background_estimation': {
-                'moving_window': moving_window,
+                'acquisition_frequency': acquisition_frequency,
+                'amplification_factor': amplification_factor,
                 'method': 'percentile',
                 'method2': 'Med',
                 'percentile': 10,
@@ -113,11 +116,12 @@ class Tool():
             file_name = file_name[:-4]
         export_data(processed_data, os.path.dirname(output_image), export_as_single_tif=True, file_name=file_name)
 
-
     def processAllData(self, argsList):
-        for args in argsList:
-            try:
-                self.processData(args)
-            except Exception as e:
-                print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
-                continue
+        if len(argsList) > 1:
+            for args in argsList:
+                try:
+                    self.processData(args)
+                except Exception as e:
+                    print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
+                    continue
+

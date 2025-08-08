@@ -29,7 +29,7 @@ class Tool():
     ]
 
     outputs = [
-        dict(name='output_image', help='Image transformée sauvegardée.', default='filledSpaceMorphology.tif', type='Path')
+        dict(name='output_image', help='Image transformée sauvegardée.', default='closing_in_space.tif', type='Path')
     ]
 
     def setup_environment(self):
@@ -91,9 +91,11 @@ class Tool():
         export_data(processed_data, os.path.dirname(output_image), export_as_single_tif=True, file_name=file_name)
 
     def processAllData(self, argsList):
-        for args in argsList:
-            try:
-                self.processData(args)
-            except Exception as e:
-                print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
-                continue
+        if len(argsList) > 1:
+            for args in argsList:
+                try:
+                    self.processData(args)
+                except Exception as e:
+                    print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
+                    continue
+

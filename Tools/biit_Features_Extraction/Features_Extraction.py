@@ -26,13 +26,14 @@ class Tool():
     inputs = [
         dict(name='events_image', help='Chemin vers le fichier .tif 4D (T,Z,Y,X).', required=True, type='Path',
              autoColumn=True),
-        dict(name='image_amplitude', help='Chemin vers le fichier .tif 4D (T,Z,Y,X) représentant l\'amplitude de l\'image.', required=True, type='Path'),
+        dict(name='image_amplitude', help='Chemin vers le fichier .tif 4D (T,Z,Y,X) représentant l\'amplitude de l\'image.', required=True, type='Path', autoColumn=True),
         dict(name='ids_events', help="Nombre d'évènements détectés", required=True, type='Path', autoColumn=True),
         dict(name='voxel_size_x', help='Taille du voxel en X en µm', required=True, type='Float', default=0.1025),
         dict(name='voxel_size_y', help='Taille du voxel en Y en µm', required=True, type='Float', default=0.1025),
         dict(name='voxel_size_z', help='Taille du voxel en Z en µm', required=True, type='Float', default=0.1344),
         dict(name='threshold_median_localized', help='Seuil de la médiane localisée pour la détection des caractéristiques.', required=True, type='Float', default=4.0),
         dict(name='volume_localized', help='Volume localisé pour la détection des caractéristiques.', required=True, type='Float', default=0.0434),
+        dict(name='threshold_hot_spots', help='Seuil pour la détection des points chauds.', required=True, type='Float', default=0.5),
     ]
 
     outputs = [
@@ -97,6 +98,7 @@ class Tool():
         voxel_size_z = float(args.voxel_size_z)
         threshold_median_localized = float(args.threshold_median_localized)
         volume_localized = float(args.volume_localized)
+        threshold_hot_spots = float(args.threshold_hot_spots)
         output_feature = args.features
 
         param_features_extraction = {
@@ -106,7 +108,8 @@ class Tool():
                 'voxel_size_y': voxel_size_y,
                 'voxel_size_z': voxel_size_z,
                 'threshold_median_localized': threshold_median_localized,
-                'volume_localized': volume_localized
+                'volume_localized': volume_localized,
+                'threshold_hot_spots': threshold_hot_spots
             },
             'save': {'save_features': 1},
             'paths': {'output_dir': os.path.dirname(output_feature) + "/"}
@@ -114,9 +117,11 @@ class Tool():
         save_features_from_events(events, ids_events, amplitude, param_features_extraction)
 
     def processAllData(self, argsList):
-        for args in argsList:
-            try:
-                self.processData(args)
-            except Exception as e:
-                print(f"Erreur lors du traitement de l'image {args.events_image}: {e}")
-                continue
+        if len(argsList) > 1:
+            for args in argsList:
+                try:
+                    self.processData(args)
+                except Exception as e:
+                    print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
+                    continue
+

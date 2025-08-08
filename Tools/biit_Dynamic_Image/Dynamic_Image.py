@@ -122,7 +122,7 @@ class Tool():
             param_dynamicImage
         )
 
-        std_noise = estimate_std_over_time(processed_data, index_xmin, index_xmax)
+        std_noise = estimate_std_over_time_optimized(processed_data, index_xmin, index_xmax)
 
         file_data_name = str(os.path.basename(output_data))
         with open(file_data_name, "w") as f:
@@ -136,9 +136,11 @@ class Tool():
         export_data(processed_data, os.path.dirname(output_image), export_as_single_tif=True, file_name=file_name)
 
     def processAllData(self, argsList):
-        for args in argsList:
-            try:
-                self.processData(args)
-            except Exception as e:
-                print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
-                continue
+        if len(argsList) > 1:
+            for args in argsList:
+                try:
+                    self.processData(args)
+                except Exception as e:
+                    print(f"Erreur lors du traitement de l'image {args.input_image}: {e}")
+                    continue
+
